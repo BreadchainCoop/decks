@@ -38,3 +38,23 @@ defeat the encryption.
 - One self-contained `.html` per deck. No build step; Pages serves the file
   directly.
 - The `slideshow-deck` container skill automates make → encrypt → publish.
+
+## Live dashboards
+
+`work-tracker.html`, `grant-dashboard.html` and `crm-dashboard.html` are
+interactive dashboards rather than slideshows, but follow the same rules —
+StatiCrypt-encrypted before pushing, one self-contained file each.
+
+They share one shell: sidebar nav, command palette (`Ctrl/⌘ K`), a slide-over
+record panel, `j`/`k` row cursor, and a live/snapshot sync indicator.
+
+`work-tracker.html` reads the **Work Tracker** sheet
+(`10vQRSVpiePANd1yNzSyua_PO5DCgk9muB_VqYIFDAkE`) and, when a write endpoint is
+configured, writes back through an Apps Script web app — see
+[`apps-script/`](apps-script/README.md).
+
+The Tasks tab carries three extra columns for the v2 features:
+`Blocked by` (task numbers, drives blocker chains + cycle detection),
+`Subtasks` (`[x] done | [ ] open`) and `Start` (optional, gives the timeline
+true spans). The Apps Script creates them automatically on first write.
+
