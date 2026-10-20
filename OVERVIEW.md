@@ -180,6 +180,23 @@ Target: **zero model calls on a quiet day**. The only daily calls should be
    weekly rollup; each starts in **dry-run** (inbox only) before it writes.
 5. **Retire** the node watcher and the separate CRM web app once their
    replacements are live for a week.
+6. **Bread HQ + campaign lifecycle** — the front door (`index.html`), campaign
+   registry, create/archive without touching contacts, directives, resources
+   and time off. Campaign deletion starts as **archive**; consolidating contacts
+   into one table (so deletion is metadata) is the later, bigger migration.
+7. **Consolidate the Apps Scripts — once, last.** After the surfaces stop
+   moving:
+   - one project, one web app URL, one token, ops namespaced per domain;
+   - every op covered by the Node harness, then exercised against a staging
+     copy of each sheet before the live one;
+   - `drafts/`, the separate CRM app and the node watcher retired only after a
+     week of matching output;
+   - triggers audited (owner, timezone, frequency) and listed in the README;
+   - all four dashboards pointed at the one endpoint and re-encrypted with the
+     shared salt.
+
+   Done means: a quiet day produces zero model calls, one inbox check covers
+   every sheet, and no dashboard holds a credential or a second copy of logic.
 
 ## 9. Open questions
 
