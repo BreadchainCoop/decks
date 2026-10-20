@@ -50,7 +50,9 @@ but follow the same rules — StatiCrypt-encrypted before pushing, one
 self-contained file each.
 
 They share one shell: sidebar nav, command palette (`Ctrl/⌘ K`), a slide-over
-record panel, `j`/`k` row cursor, and a live/snapshot sync indicator.
+record panel, `j`/`k` row cursor, and a live/snapshot sync indicator. Each tool
+has its own accent colour — Grants orange, CRM green, Work blue, Contributors
+brown — set by `body[data-product]` in the shell.
 
 `work-tracker.html` reads the **Work Tracker** sheet
 (`10vQRSVpiePANd1yNzSyua_PO5DCgk9muB_VqYIFDAkE`) and, when a write endpoint is
