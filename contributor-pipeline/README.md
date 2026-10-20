@@ -54,5 +54,7 @@ workspace:
 - `state.json` (watcher cursor)
 - `raw-active.json` / `raw-legacy.json` (full form dumps)
 - `contributors/signups-db.md` (all 42 signups with emails/handles)
-- The sheet ID itself stays in code **and this repo is private** for that reason —
-  the sheet is link-readable, so please don't paste the ID into public repos/docs.
+- The sheet ID *does* appear in the code here — house practice, same as the
+  dashboards at the repo root. The sheet itself is link-readable, so keep data
+  out of git and StatiCrypt-encrypt any dashboard that renders contributor rows
+  before it lands here.
