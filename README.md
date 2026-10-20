@@ -3,6 +3,9 @@
 Statically-hosted **Breadrich Engels** debrief slideshows, served via GitHub
 Pages at `https://breadchaincoop.github.io/decks/<name>.html`.
 
+The system map — dashboards, sheets, automations and where model tokens are (and
+are not) spent — is [`OVERVIEW.md`](OVERVIEW.md).
+
 ## ⚠️ Always statically-encrypt every deck before pushing
 
 Decks are **password-gated** with [StatiCrypt](https://github.com/robinmoisson/staticrypt)

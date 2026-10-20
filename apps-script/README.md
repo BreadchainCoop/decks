@@ -17,7 +17,8 @@ One deployment, one URL, one `TOKEN`. Both decks run in copy-command mode until
 
 `drafts/` holds the mechanical jobs that are being consolidated separately
 (GitHub → Tasks sync, grants intake/hygiene/discovery). They are not part of
-this endpoint yet.
+this endpoint yet. The automation map — jobs, triggers, the Agent Inbox and the
+token budget — is in [`../OVERVIEW.md`](../OVERVIEW.md) §4.
 
 ## Deploy
 
