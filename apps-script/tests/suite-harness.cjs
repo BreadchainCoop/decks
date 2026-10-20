@@ -72,8 +72,13 @@ assert.equal(call({op:"grants.stage",funder:"Synthetic funder",stage:"Drafting"}
 assert.equal(books.grants.sheets[0].values[1][1],"Drafting");
 assert.equal(call({op:"grants.update",funder:"Synthetic funder",patch:{"Pipeline Stage":"Submitted","Next Action Date":"not a date"}}).ok,false);
 assert.equal(books.grants.sheets[0].values[1][1],"Drafting","invalid grants patch makes no partial change");
-books.grants.sheets[0].values.push(["Synthetic funder","Qualified","","","","",""]);
+books.grants.sheets[0].values[0].push("Grant Name");
+books.grants.sheets[0].values[1].push("Operations Grant");
+books.grants.sheets[0].values.push(["Synthetic funder","Qualified","","","","","","Second Grant"]);
 assert.equal(call({op:"grants.stage",funder:"Synthetic funder",stage:"Submitted"}).ok,false,"duplicate funder never guesses target");
+assert.equal(call({op:"grants.stage",funder:"Synthetic funder",grant:"Second Grant",stage:"Submitted"}).ok,true,"naming the grant disambiguates a repeat funder");
+assert.equal(books.grants.sheets[0].values[2][1],"Submitted","named grant row updated");
+assert.equal(call({op:"grants.stage",funder:"Synthetic funder",grant:"No Such Grant",stage:"Submitted"}).ok,false,"unknown grant still rejects");
 books.grants.sheets[0].values.pop();
 books.grants.sheets[0].values[0].push("Website","Notes");books.grants.sheets[0].values[1].push("https://example.invalid/","private application notes");
 books["grants-feed"]=new Book("grants-feed",[new Sheet("Targets",[Array(14).fill("old-private-value"),Array(14).fill("old-private-value"),Array(14).fill("old-private-value")],987),new Sheet("Stats",[["Metric","Value"],["Funds Raised (EUR) — confirmed amounts only",400],["Campaign Goal",100]],654)]);

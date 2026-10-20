@@ -14,10 +14,18 @@ var BreadGrants = (function () {
     var funderCol = map.funder;
     if (funderCol === undefined) throw new Error("Missing Funder header");
     if (typeof body.funder !== "string" || !body.funder.trim()) throw new Error("Funder required");
+    // Multi-programme funders (two rows, same org) are addressable only when the
+    // caller also names the grant; without it an ambiguous funder still rejects.
+    var grantCol = map.grant !== undefined ? map.grant : map["grant name"];
+    var wantGrant = typeof body.grant === "string" ? body.grant.trim().toLowerCase() : "";
     var rows = sh.getLastRow() < 2 ? [] : sh.getRange(2, 1, sh.getLastRow() - 1, width).getDisplayValues();
     var hits = [];
-    rows.forEach(function (r, i) { if (String(r[funderCol]).trim().toLowerCase() === body.funder.trim().toLowerCase()) hits.push({ row: i + 2, values: r }); });
-    if (hits.length !== 1) throw new Error("Funder missing or ambiguous");
+    rows.forEach(function (r, i) {
+      if (String(r[funderCol]).trim().toLowerCase() !== body.funder.trim().toLowerCase()) return;
+      if (wantGrant && grantCol !== undefined && String(r[grantCol]).trim().toLowerCase() !== wantGrant) return;
+      hits.push({ row: i + 2, values: r });
+    });
+    if (hits.length !== 1) throw new Error(wantGrant ? "Funder/grant missing or ambiguous" : "Funder missing or ambiguous");
     var item = hits[0], patch = body.op === "grants.stage" ? { "Pipeline Stage": body.stage } : body.patch;
     if (!patch || typeof patch !== "object" || Array.isArray(patch) || !Object.keys(patch).length) throw new Error("Patch required");
     var allowed = {};

@@ -102,7 +102,15 @@ IDs yourself, including any new sheets.
 ### Source schemas verified
 
 - Grants uses `Organizational Name` / `Grant Name`; the feed uses `Funder` /
-  `Grant`. Both canonical names and verified aliases are supported.
+  `Grant`. Both canonical names and verified aliases are supported. Writes
+  match the funder exactly and reject ambiguity; when one organisation holds
+  several grants, pass `grant` as well or the request is refused rather than
+  applied to the first matching row.
+- The tracker's legacy stage column is `Approach`; the canonical
+  `Pipeline Stage` (and `Document Link`, `Tier`, `Next Action`,
+  `Next Action Date`, `Submitted On`, `Outcome`) are appended after it. Existing
+  rows already carry canonical stages, so the dashboard is not blank — but do
+  not confuse the two vocabularies.
 - `Start a Grant` has instructions on rows 1–2 and its actual header on row 3.
   Existing `Status (Breadrich fills this)` entries are treated as handled.
   New fixed marker columns are appended on that header row, never guessed from
@@ -119,6 +127,13 @@ IDs yourself, including any new sheets.
    [CRM-WRITES.md](CRM-WRITES.md), then `breadCrmPrepareWriteSchemaCopy()`.
 3. Run `breadCrmRefreshFeedCopy()` and `breadRefreshGrantsFeed()`. Save the returned
    gids for the staging build. Source and feed IDs must be distinct.
+   Then make the **feeds** readable by the people testing the decks: a sheet
+   copy does *not* inherit "publish to web" or link sharing, and the dashboards
+   read feeds through `gviz`, so an unshared feed renders as an empty
+   dashboard. Share each staging feed as **Anyone with the link · Viewer**
+   (published feeds keep their production state). The Work and Contributor
+   source copies need the same treatment for their dashboards. Keep the CRM
+   source and the Grants tracker private — they hold notes the feeds omit.
 4. Run `breadSuitePreflight()`. It is read-only and reports missing configuration
    and tabs; it cannot prove edit access. Exercise scratch writes to verify that.
 
