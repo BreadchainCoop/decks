@@ -41,9 +41,10 @@ defeat the encryption.
 
 ## Live dashboards
 
-`work-tracker.html`, `grant-dashboard.html` and `crm-dashboard.html` are
-interactive dashboards rather than slideshows, but follow the same rules —
-StatiCrypt-encrypted before pushing, one self-contained file each.
+`work-tracker.html`, `grant-dashboard.html`, `crm-dashboard.html` and
+`contributor-dashboard.html` are interactive dashboards rather than slideshows,
+but follow the same rules — StatiCrypt-encrypted before pushing, one
+self-contained file each.
 
 They share one shell: sidebar nav, command palette (`Ctrl/⌘ K`), a slide-over
 record panel, `j`/`k` row cursor, and a live/snapshot sync indicator.
@@ -51,7 +52,18 @@ record panel, `j`/`k` row cursor, and a live/snapshot sync indicator.
 `work-tracker.html` reads the **Work Tracker** sheet
 (`10vQRSVpiePANd1yNzSyua_PO5DCgk9muB_VqYIFDAkE`) and, when a write endpoint is
 configured, writes back through an Apps Script web app — see
-[`apps-script/`](apps-script/README.md).
+[`apps-script/`](apps-script/README.md). The same deployment also handles the
+contributor dashboard's writes (one URL, one token).
+
+`contributor-dashboard.html` reads the **Contributor Interest Form** sheet
+(`1ncGbPZyf0vH9NCsndvaUkmkJremWz1YW1_-YPpLRjxA`, live tab
+`New Form Responses 25 Sept 2025`) and is the human side of
+[`contributor-pipeline/`](contributor-pipeline/README.md): who signed up, who is
+still waiting on a first message, what the skill pool looks like, and the core
+team's 1–5 triage scores. Assigning an owner also creates or updates that
+person's outreach task in the Work Tracker, so the hand-off shows up in their
+workload. It renders names, emails and handles — the sheet is link-readable, but
+keep the page internal anyway.
 
 The Tasks tab carries three extra columns for the v2 features:
 `Blocked by` (task numbers, drives blocker chains + cycle detection),
