@@ -1,8 +1,14 @@
 # Bread suite — consolidated release
 
-**Code and local tests are complete for this release. Nothing in this runbook
-means a Google deployment, sheet migration or production publication has run.**
-The encrypted HTML currently in the repository is still the prior release.
+**Code, local tests and the five encrypted surfaces are complete for this
+release. Nothing in this runbook means a Google deployment, sheet migration or
+publication (git push) has run.** The five HTML files in the repository root
+are the new release, encrypted with the shared salt and round-trip verified:
+`index.html` is Bread HQ in **explicitly-labelled local-demo mode** (no
+endpoint configured yet); the four dashboards carry the new code while keeping
+their prior production contracts (CRM `CRM_V2` disabled, Grants edit hidden
+without a write URL), so behaviour is unchanged until cutover. Everything below
+§2 onward is still outstanding before the suite actually goes live.
 
 ## What is built
 
