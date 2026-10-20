@@ -36,7 +36,10 @@ function breadContributorGate() {
       };
     }).filter(function (p) { return p.name && p.ts; });
 
-    if (!people.length) return "no signups";
+    if (!people.length) {
+      if (!Bh.prop("cursor:contributors", "")) Bh.setProp("cursor:contributors", "1970-01-01T00:00:00.000Z");
+      return "no signups";
+    }
 
     var channel = function (p) {
       var s = p.pref.toLowerCase();
@@ -61,14 +64,15 @@ function breadContributorGate() {
     var old = waiting.filter(function (p) { return days(p) > 30; });
     var oldest = waiting.reduce(function (n, p) { return Math.max(n, days(p)); }, 0);
 
-    Bh.setProp("cursor:contributors", maxTs.toISOString());
     if (isBaseline) {
+      Bh.setProp("cursor:contributors", maxTs.toISOString());
       Bh.clear("contributors", "gate");
       return "baseline: " + people.length;
     }
 
     if (!fresh.length && !staleUnowned.length && !old.length) {
       Bh.clear("contributors", "gate");
+      Bh.setProp("cursor:contributors", maxTs.toISOString());
       return "clear";
     }
 
@@ -95,10 +99,10 @@ function breadContributorGate() {
     ]);
 
     var sig = JSON.stringify({
-      waiting: waiting.length,
+      latest: maxTs.toISOString(),
+      waiting: waiting.map(function (p) { return p.name + "|" + p.ts.toISOString(); }),
       noOwner7d: staleUnowned.map(function (p) { return p.name + "|" + on(p); }),
-      waiting30d: old.map(function (p) { return p.name + "|" + on(p); }),
-      oldest: oldest
+      waiting30d: old.map(function (p) { return p.name + "|" + on(p); })
     });
 
     var wrote = Bh.notify({
@@ -110,6 +114,7 @@ function breadContributorGate() {
       payload: payload,
       sig: sig
     });
+    Bh.setProp("cursor:contributors", maxTs.toISOString());
     return wrote ? "notified: " + summary : "unchanged";
   });
 }

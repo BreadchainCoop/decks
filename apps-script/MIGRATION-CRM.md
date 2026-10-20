@@ -4,10 +4,18 @@
 table now, so a campaign is metadata rather than a container. After this,
 creating or deleting a campaign can never touch a contact record.
 
-Status: **spec — not executed.** Target sheet:
+Status: **copy-only migration, standalone CRM writes, staging feed projection,
+and feature-gated dashboard support implemented and tested locally. No real-sheet
+migration or deployment yet.** Production sheet:
 `1c4PgSHC2N2n7VsFHhYH0PMvtQljvZg-ZQo6MtOojVYY` (the real CRM sheet).
 The dashboard reads the separate feed
 `19Lxe0C14BOYbOj0Z0nyoQc4-I_aw_jgybcq9LggfcUw`; that feed is rebuilt in step 6.
+
+Staging CRM copy provided by the user:
+`1yt--g8XMWJxkkJMcodbbDxN_y7KVwgqdb3XmDbsEV_E`. A read-only inventory confirms
+208 contacts with the same ten per-campaign counts. A separate staging feed
+copy is required before installing the projection. Runbook:
+[`CRM-WRITES.md`](CRM-WRITES.md).
 
 ## 1. Why
 
@@ -65,8 +73,10 @@ Deliverable · Last Time Connected · Location Met · Communication Method Used`
 - Contact values are sometimes URLs or org names, not people. Keep verbatim.
 - Owners carry typos/suffixes (`daopunk?`, `blessing?`). Keep raw; normalise in
   the app, not the data.
-- `Last Time Connected` is free text (`24Feb 2025`, `Jan 2025`). Only 19 rows
-  have one.
+- `Last Time Connected` is free text (`24Feb 2025`, `Jan 2025`, `ongoing`).
+  **25 source rows** have a value (the old feed exposed only 19). Yearless
+  values like `2 Apr` and `24th March` must remain raw and flagged, not assigned
+  a guessed year.
 - Status vocabulary: 70 `Contacted`, 13 `Not contacted`, 4 `Blocked`,
   3 `Completed`, 1 `Declined`, **117 blank**.
 - Priority: 35 `High`, 4 `Immediate`, 68 `Low`, **101 blank**.
@@ -111,7 +121,7 @@ is a separate, explicit op that refuses if rows still reference the campaign.
 | 12 | `Project` | raw |
 | 13 | `Deliverable` | raw (blank for Artizen) |
 | 14 | `LastConnectedRaw` | free text |
-| 15 | `LastConnectedDate` | normalised `yyyy-mm-dd` or blank |
+| 15 | `LastConnectedDate` | normalised `yyyy-mm-dd` or blank; raw text retained if unparseable |
 | 16 | `LocationMet` | raw |
 | 17 | `Method` | **coordinates; never projected to the feed** |
 | 18 | `CreatedAt` | migration timestamp |
@@ -128,8 +138,8 @@ Freeze row 1, add data validation for `Status` and `Priority`, and set the
 
 Keep the current columns and **add** the IDs; old rows can stay blank:
 
-`Timestamp · Type · LeftContactID · LeftCampaign · LeftRow · LeftContact ·
-RightContactID · RightCampaign · RightRow · RightContact · Note · By`
+`Timestamp · Type · LeftCampaign · LeftRow · LeftContact ·
+RightCampaign · RightRow · RightContact · Note · By · LeftContactID · RightContactID`
 
 New writes fill IDs only. The dashboard prefers IDs, falls back to
 campaign+row.
@@ -190,28 +200,36 @@ Parsing rules for `LastConnectedRaw`:
 
 ## 6. Procedure
 
-### Step 0 — freeze and back up
+### Step 0 — make the rehearsal copy
 
-1. Announce a 30-minute write freeze in `#breadrich-engels`.
-2. **File → Make a copy** of the whole CRM spreadsheet; name it
+1. **File → Make a copy** of the whole CRM spreadsheet; name it
    `CRM backup YYYY-MM-DD pre-consolidation`.
-3. Export every campaign tab to CSV (for a second rollback path).
-4. Record row counts (table in §3) and the History row count.
+2. Record row counts (table in §3) and the History row count. Live writes can
+   continue during this rehearsal; only step 8 needs a write freeze.
+3. Export every campaign tab to CSV before the production cutover (for a
+   second rollback path), not as a prerequisite for local tests.
 
 ### Step 1 — registry
 
-Create `Campaigns`, seed the ten rows, and give every tab a `CampaignID`.
+On the copy, create `Campaigns`, seed the ten rows, and give every tab a `CampaignID`.
 Do **not** rename tabs yet.
 
 ### Step 2 — target tab + migration map
 
 Create `Contacts` with the headers in §4.2. Create `_migration_map`:
 
-`LegacyCampaign · LegacyRow · LegacyGID · ContactID · NewRow · Flag`
+`LegacyCampaign · LegacyRow · LegacyGID · ContactID · NewRow · Flag · TargetHash`
+
+`TargetHash` fingerprints the imported columns. A rerun refuses to overwrite a
+manually edited imported cell; an unchanged rerun is a no-op. The optional
+`Org` field is preserved on a source-delta rerun.
 
 ### Step 3 — migrate
 
-One bound Apps Script function, `migrateCrmContacts()`:
+The copy-only Apps Script in [`crm-migration.gs`](crm-migration.gs) provides
+`breadCrmPreviewCopy(copyId)`, `breadCrmMigrateCopy(copyId)` and
+`breadCrmValidateCopy(copyId)`. It refuses the known production and feed IDs.
+The migration algorithm is:
 
 ```
 read Campaigns
@@ -224,8 +242,9 @@ for each campaign row:
     skip if contact == "Contact / Team"      // repeated header
     build target row from §5
     ContactID = stable hash; suffix on collision
-    append to Contacts
-    append mapping row
+    if already mapped and unchanged: do nothing
+    if already mapped and source changed: update only if target hash matches
+    else append to Contacts and _migration_map
 batch-write (500 rows/request)
 ```
 
@@ -241,21 +260,35 @@ Automated checks, then a human spot-check:
 - [ ] No blank `Contact`; no `Contact / Team` rows.
 - [ ] Status counts: 70 / 13 / 4 / 3 / 1 / 117 blank.
 - [ ] Priority counts: 4 / 35 / 68 / 101 blank.
-- [ ] 19 `LastConnectedDate` values; every unparsed one is flagged.
+- [ ] 25 non-empty `LastConnectedRaw` values in the source at the 2026-10-21
+  baseline (19 appeared in the old feed);
+  parseable dates have `LastConnectedDate`, and every unparseable date is flagged.
 - [ ] Non-empty Goal/Action/Project counts match the source tabs.
 - [ ] 7 duplicate labels still exist as separate rows (not merged).
 - [ ] `_migration_map` has 208 rows and every `NewRow` points at the right contact.
 
-If any check fails: stop, fix the script, delete `Contacts` rows, rerun. The
-source tabs are untouched.
+If any check fails: stop and inspect the copy and migration map. Never delete
+target rows automatically; a partial write or a manual edit needs explicit
+reconciliation. The source tabs are untouched.
 
 ### Step 5 — feed and History/Links
 
+- Implemented staging projection: `crm-feed.gs`,
+  `breadCrmRefreshFeedCopy()`; production IDs are forbidden. With the new write
+  app in the same project and `CRM_FEED_ID` set, successful writes refresh the
+  staging feed. A projection failure reports `ok:true, feedUpdated:false` so
+  clients do not retry an already committed add.
 - Rebuild the feed `Contacts` tab from `Contacts`, projecting the columns in
   §4.5 and excluding `Method`.
-- Add `ContactID` to `History`; backfill the 10 rows by matching
-  `Campaign + Contact` against the migration map.
-- Add ID columns to `Links` (no rows today).
+- Add `ContactID` to `History`; backfill rows by matching `Campaign + Contact`
+  **only where exactly one contact row matches**. Leave ambiguous entries blank
+  for manual review; History has no row ID today. Implemented in
+  `breadCrmPrepareWriteSchemaCopy()` — it returns `historyBackfilled` /
+  `unresolvedHistory` counts for the review step.
+- Add ID columns to `Links` (no rows today). The same helper backfills each
+  link side only when the legacy campaign+row maps to exactly one migrated
+  contact and the recorded contact name agrees; anything else stays blank and
+  is counted in `linkSidesBackfilled` for manual review.
 - Keep the feed's Contacts gid unchanged.
 
 ### Step 6 — app cutover
@@ -271,11 +304,15 @@ source tabs are untouched.
 - Campaign actions: **New campaign** (registry insert), **Archive/restore**.
   No "delete tab" anywhere.
 
-**Write app** (`work-tracker-write.gs`):
+**CRM write app** (new standalone [`crm-write.gs`](crm-write.gs), not deployed):
 
-- Add `contact.*` and `campaign.*` ops.
-- Keep the old `update/mark/link/unlink/add` for the transition; resolve
-  `campaign + row` through `_migration_map` to a `ContactID`.
+- User confirmed a new endpoint can be installed later; no need to retrieve
+  the old endpoint source. Follow [`CRM-WRITES.md`](CRM-WRITES.md) for staging.
+  The old dashboard's `WRITE_URL` points to a different script;
+  `work-tracker-write.gs` handles only Work Tracker + Contributors.
+- The replacement implements `contact.*` and `campaign.*` ops and rejects
+  legacy row-based ops. Leave the old endpoint unchanged until the new
+  dashboard and replacement endpoint switch together.
 - `contact.update` accepts a whitelist: `Priority`, `Status`, `Owner`, `Goal`,
   `Type`, `Action`, `Project`, `Deliverable`, `LastConnected*`, `LocationMet`,
   `Method`, `Notes`. Never `ContactID`, `CampaignID`, `CreatedAt`.
@@ -291,8 +328,10 @@ source tabs are untouched.
 Do **not** run a week of dual writes. Build and validate against a copy of the
 spreadsheet, then rehearse the switch:
 
-- Copy the CRM sheet; point a staging copy of the feed and a `crm-v2.html` at
-  it. No live writes.
+- Make an editable copy of the CRM sheet, run the three copy-only functions in
+  [`crm-migration.gs`](crm-migration.gs) against its ID, and compare the
+  validation report with the live baseline. Do not pass the production ID.
+- Point a staging copy of the feed and a `crm-v2.html` at it. No live writes.
 - Compare totals, per-campaign counts, status/priority counts and 10 random
   records with the live dashboard.
 - Test the full write path on a scratch contact: edit, mark, link, unlink,
@@ -302,8 +341,11 @@ spreadsheet, then rehearse the switch:
 ### Step 8 — cutover (one short window)
 
 1. Announce a 60–90 minute CRM write freeze.
-2. Re-run `migrateCrmContacts()` (idempotent; it updates by legacy
-   campaign+row) to catch anything changed since the rehearsal.
+2. Take fresh backups of **both** the production CRM and the feed. The
+   copy-only guard in `crm-migration.gs` must not be removed for staging;
+   production execution needs a separately reviewed cutover entry point.
+   Migrate production only after the replacement CRM endpoint has passed the
+   staging rehearsal.
 3. Rebuild the feed, deploy the new dashboard and write app together.
 4. Spot-check 10 records, then rename the old tabs `_legacy_<campaign>`.
 5. Unfreeze. Keep the previous app deployment and `_legacy_*` tabs for 30 days
@@ -322,8 +364,10 @@ is short and rehearsed.
 ## 7. Rollback
 
 - Source tabs are never modified during steps 1–7.
-- Rollback = point the dashboard back at the old feed and restore the previous
-  write-app deployment. `Contacts`, `Campaigns` and the map can stay for a
+- Rollback = **restore the old feed tab from its pre-cutover copy**, restore
+  the old dashboard and write-app deployment, and restore the old tab names if
+  they were renamed. The old dashboard cannot read a newly projected feed just
+  by changing a constant. `Contacts`, `Campaigns` and the map can stay for a
   second attempt.
 - The spreadsheet copy in step 0 is the last resort.
 

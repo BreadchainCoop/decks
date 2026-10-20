@@ -12,10 +12,10 @@
  */
 
 var Bh = (function () {
-  var WORK_SS_ID = "10vQRSVpiePANd1yNzSyua_PO5DCgk9muB_VqYIFDAkE";
-  var CONTRIB_SS_ID = "1ncGbPZyf0vH9NCsndvaUkmkJremWz1YW1_-YPpLRjxA";
-  var CRM_FEED_ID = "19Lxe0C14BOYbOj0Z0nyoQc4-I_aw_jgybcq9LggfcUw";
-  var CRM_GID_CONTACTS = 1045890393;
+  var WORK_SS_ID = prop("WORK_SPREADSHEET_ID", "10vQRSVpiePANd1yNzSyua_PO5DCgk9muB_VqYIFDAkE");
+  var CONTRIB_SS_ID = prop("CONTRIB_SPREADSHEET_ID", "1ncGbPZyf0vH9NCsndvaUkmkJremWz1YW1_-YPpLRjxA");
+  var CRM_FEED_ID = prop("CRM_FEED_ID", "19Lxe0C14BOYbOj0Z0nyoQc4-I_aw_jgybcq9LggfcUw");
+  var CRM_GID_CONTACTS = prop("CRM_GID_CONTACTS", 1045890393);
 
   var INBOX_SHEET = "Agent Inbox";
   var INBOX_HEADERS = ["Timestamp", "Source", "Kind", "Severity", "Ref", "Summary", "Payload", "Handled"];
@@ -52,6 +52,10 @@ var Bh = (function () {
     if (v === null || v === undefined || v === "") return null;
     if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
     var s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+      var iso = new Date(s);
+      return isNaN(iso.getTime()) ? null : iso;
+    }
     var m = s.match(/^Date\((\d+),(\d+),(\d+)/);
     if (m) return new Date(+m[1], +m[2], +m[3]);
     m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -73,9 +77,10 @@ var Bh = (function () {
   /* ── sheets ─────────────────────────────────────────────────────────── */
   /** header text (trimmed, lowercased) -> 1-based column. Missing required
    *  headers are appended only when `addMissing` is true. */
-  function headerMap(sh, required, addMissing) {
+  function headerMap(sh, required, addMissing, headerRow) {
+    headerRow = headerRow || 1;
     var last = Math.max(sh.getLastColumn(), 1);
-    var head = sh.getRange(1, 1, 1, last).getValues()[0]
+    var head = sh.getRange(headerRow, 1, 1, last).getValues()[0]
       .map(function (h) { return String(h).trim().toLowerCase(); });
     var map = {};
     head.forEach(function (h, i) { if (h && map[h] === undefined) map[h] = i + 1; });
@@ -85,7 +90,8 @@ var Bh = (function () {
         var k = String(h).trim().toLowerCase();
         if (map[k]) return;
         next++;
-        sh.getRange(1, next).setValue(h);
+        if (next > sh.getMaxColumns()) sh.insertColumnsAfter(sh.getMaxColumns(), next - sh.getMaxColumns());
+        sh.getRange(headerRow, next).setValue(h);
         map[k] = next;
       });
     }
@@ -109,14 +115,15 @@ var Bh = (function () {
     return null;
   }
   /** read a tab into objects keyed by lowercased header; skips fully empty rows */
-  function readRows(sh) {
+  function readRows(sh, headerRow) {
+    headerRow = headerRow || 1;
     var last = sh.getLastRow();
-    if (last < 2) return { map: headerMap(sh, [], false), rows: [] };
-    var map = headerMap(sh, [], false);
+    if (last <= headerRow) return { map: headerMap(sh, [], false, headerRow), rows: [], headerRow: headerRow };
+    var map = headerMap(sh, [], false, headerRow);
     var width = Math.max(sh.getLastColumn(), 1);
-    var values = sh.getRange(2, 1, last - 1, width).getValues();
+    var values = sh.getRange(headerRow + 1, 1, last - headerRow, width).getValues();
     var rows = values.map(function (r, i) {
-      var o = { __row: i + 2 };
+      var o = { __row: i + headerRow + 1 };
       Object.keys(map).forEach(function (k) { o[k] = r[map[k] - 1]; });
       return o;
     }).filter(function (o) {
@@ -124,7 +131,7 @@ var Bh = (function () {
         return k !== "__row" && String(o[k] === null || o[k] === undefined ? "" : o[k]).trim() !== "";
       });
     });
-    return { map: map, rows: rows };
+    return { map: map, rows: rows, headerRow: headerRow };
   }
 
   /* ── Agent Inbox ────────────────────────────────────────────────────── */
@@ -155,8 +162,17 @@ var Bh = (function () {
     return sh.getLastRow();
   }
   /** the one inbox lives in the Work Tracker, whatever sheet the job reads */
+  function assertWriteDestination(id) {
+    if (!id) throw new Error("Write destination not configured");
+    if (typeof BREAD_SUITE_BUILD !== "undefined" && BREAD_SUITE_BUILD && prop("BREAD_ENVIRONMENT", "staging") !== "production") {
+      var live = ["10vQRSVpiePANd1yNzSyua_PO5DCgk9muB_VqYIFDAkE", "1ncGbPZyf0vH9NCsndvaUkmkJremWz1YW1_-YPpLRjxA", "1c4PgSHC2N2n7VsFHhYH0PMvtQljvZg-ZQo6MtOojVYY", "19Lxe0C14BOYbOj0Z0nyoQc4-I_aw_jgybcq9LggfcUw", "1OmGfZO9BUhNFY1JEiIkRWY9eEnvW7x3fTtckXeqLa-Q", "1iWZXv2yaquz_oRlYGCn0jhJYsVuseea6e0aE2EpYsx8"];
+      live.push("1Rm_rucOcAbcJTHQG7U84xFOi0fw3ZM2jT9M8R_adwME");
+      if (live.indexOf(id) >= 0) throw new Error("Known production write destination forbidden in staging");
+    }
+    return id;
+  }
   function inboxBook() {
-    return SpreadsheetApp.openById(WORK_SS_ID);
+    return SpreadsheetApp.openById(assertWriteDestination(WORK_SS_ID));
   }
 
   /**
@@ -198,7 +214,7 @@ var Bh = (function () {
     json: json, fail: fail,
     today: today, fmtDate: fmtDate, parseDate: parseDate, daysSince: daysSince,
     headerMap: headerMap, col: col, sheetById: sheetById, sheetByRegex: sheetByRegex, readRows: readRows,
-    ensureInbox: ensureInbox, appendEvent: appendEvent, notify: notify, clear: clear,
+    ensureInbox: ensureInbox, appendEvent: appendEvent, notify: notify, clear: clear, assertWriteDestination: assertWriteDestination,
     withLock: withLock, digestLine: digestLine
   };
 })();

@@ -1,0 +1,93 @@
+#!/usr/bin/env node
+const fs=require("node:fs"),path=require("node:path"),vm=require("node:vm"),assert=require("node:assert/strict");
+const {Sheet,Book,environment}=require("./fake-sheets.cjs");
+const {build}=require("../build-suite.cjs");
+const taskHeaders=["Task","Project","Owner","Status","Priority","Due","Contact / Org","Grant","KB link","Notes","Blocked by","Subtasks","Start"];
+const contactHeaders=["ContactID","CampaignID","Campaign","Contact","Org","Priority","Status","Goal","Type","Owner","Action","Project","Deliverable","LastConnectedRaw","LastConnectedDate","LocationMet","Method","CreatedAt","UpdatedAt","LegacyCampaign","LegacyRow","LegacyGID","Notes"];
+const campaignHeaders=["CampaignID","Campaign","Status","Owner","Description","Goal","Created","Archived","Sort"];
+const books={
+  work:new Book("work",[new Sheet("Tasks",[taskHeaders,["Synthetic task","Ops","Josh","Backlog","High","","","","","","","",""]]),new Sheet("History",[["Timestamp","Op","Task","Detail","By"]])]),
+  contributors:new Book("contributors",[new Sheet("New Form Responses Test",[["Timestamp","What is your name?","Status","Contact perons in BC core"],[new Date(),"Synthetic member","",""]])]),
+  crm:new Book("crm",[new Sheet("Contacts",[contactHeaders,["c_test","stacks","Stacks","Synthetic contact","","High","","Goal","","Josh","Call","Stacks","","","","","private@example.invalid","now","now","Stacks",2,0,""]]),new Sheet("Campaigns",[campaignHeaders,["stacks","Stacks","Active","","","","","",1]])]),
+  hq:new Book("hq"),
+  grants:new Book("grants",[new Sheet("Grants",[["Organizational Name","Pipeline Stage","Team Member","Next Action","Next Action Date","Document Link","Outcome"],["Synthetic funder","Qualified","Josh","Check","","",""]])]),
+  budget:new Book("budget",[new Sheet("Calculator",[["Breadchain Runway Calculator"],["Q3 2026 (Aug-Oct)"],["Treasury","$12,000.00"],["Solidarity Fund Income","$100.00"],["Outstanding Income","$2,500.00"],["Outstanding Debt","$500.00"],["Total","$14,100.00"],["Runway","4.2"],["Amount Leftover","-$100.00"],["Hourly Wage","$25.00"]],1139000984)])
+};
+const props={BREAD_WRITE_TOKEN:"member-"+"x".repeat(40),HQ_COMMITTEE_TOKEN:"committee-"+"y".repeat(40),WORK_SPREADSHEET_ID:"work",CONTRIB_SPREADSHEET_ID:"contributors",CRM_SPREADSHEET_ID:"crm",HQ_SPREADSHEET_ID:"hq",GRANTS_SPREADSHEET_ID:"grants",HQ_BUDGET_SPREADSHEET_ID:"budget"};
+const env=environment(books,props),ctx=vm.createContext(env.sandbox),code=build();
+vm.runInContext(code,ctx);
+const call=(body,token=props.BREAD_WRITE_TOKEN)=>JSON.parse(ctx.doPost({postData:{contents:JSON.stringify({token,...body})}}).text);
+assert.equal((code.match(/function doPost\(/g)||[]).length,1);
+assert.equal((code.match(/function doGet\(/g)||[]).length,1);
+assert.equal(JSON.parse(ctx.doGet().text).service,"bread-suite");
+assert.throws(()=>ctx.breadCrmMigrateProduction(),/explicit cutover approval/);
+assert.throws(()=>ctx.breadCrmPrepareWriteSchemaProduction(),/approved, backed-up write freeze/);
+assert.throws(()=>ctx.breadCrmRefreshFeedProduction(),/approval required/);
+assert.throws(()=>ctx.Bh.assertWriteDestination("10vQRSVpiePANd1yNzSyua_PO5DCgk9muB_VqYIFDAkE"),/forbidden in staging/);
+assert.equal(call({op:"work.update",row:2,task:"Synthetic task",patch:{Status:"Review"}},"bad").ok,false);
+assert.equal(books.work.getSheetByName("Tasks").values[1][3],"Backlog");
+assert.equal(call({op:"update",campaign:"Stacks",contact:"Synthetic",row:2,patch:{Status:"Done"}}).ok,false,"legacy CRM packet cannot write Work rows");
+assert.equal(call({op:"work.update",row:2,patch:{Status:"Done"}}).ok,false,"row hints require title verification");
+assert.equal(call({op:"work.update",row:2,task:"Synthetic task",patch:{Status:"Review"}}).ok,true);
+assert.equal(books.work.getSheetByName("Tasks").values[1][3],"Review");
+assert.equal(call({op:"work.add",fields:{Task:"New task",Owner:"Unai",Status:"Backlog"}}).ok,true);
+assert.equal(books.work.getSheetByName("Tasks").getLastRow(),3);
+assert.equal(call({op:"contributor.update",signupRow:2,name:"Synthetic member",timestampMs:books.contributors.sheets[0].values[1][0].getTime(),patch:{Status:"Contacted"}}).ok,true);
+assert.equal(books.contributors.sheets[0].values[1][2],"Contacted");
+assert.equal(call({op:"contributor.assign",signupRow:2,name:"Synthetic member",timestampMs:books.contributors.sheets[0].values[1][0].getTime(),owner:"Josh",task:{Task:"Welcome Synthetic member",Project:"Contributors",Owner:"Josh",Status:"Backlog",Notes:"[ctr:synthetic] test"}}).ok,true);
+assert.equal(books.work.getSheetByName("Tasks").getLastRow(),4);
+assert.equal(call({op:"contributor.assign",signupRow:2,name:"Synthetic member",timestampMs:books.contributors.sheets[0].values[1][0].getTime(),owner:"Unai",task:{Task:"Welcome Synthetic member",Owner:"Unai",Notes:"[ctr:synthetic] test"}}).ok,true);
+assert.equal(books.work.getSheetByName("Tasks").getLastRow(),4,"assignment upsert has no duplicate");
+assert.equal(call({op:"crm.update",contactId:"c_test",patch:{Owner:"Unai"}}).ok,true);
+assert.equal(books.crm.sheets[0].values[1][9],"Unai");
+assert.equal(call({op:"crm.update",campaign:"Stacks",row:2,patch:{Owner:"Josh"}}).ok,false,"CRM alias still requires stable ID");
+const archive=call({op:"campaign.archive",campaignId:"stacks"});assert.equal(archive.ok,true);
+assert.equal(books.crm.sheets[0].getLastRow(),2);
+assert.equal(ctx.breadHqSetup().ok,true);
+assert.equal(ctx.breadHqSetup().ok,true,"setup idempotent");
+const directive={Title:"Synthetic draft",Body:"Not policy",Owner:"Committee",Status:"Draft",Start:"",End:""};
+assert.equal(call({op:"hq.directive.add",fields:directive}).ok,false);
+assert.equal(call({op:"hq.directive.add",fields:directive,committeeToken:"wrong"}).ok,false);
+const d=call({op:"hq.directive.add",fields:directive,committeeToken:props.HQ_COMMITTEE_TOKEN});assert.equal(d.ok,true);
+assert.equal(call({op:"hq.read"}).directives.length,0,"drafts absent from member response");
+assert.equal(call({op:"hq.read",committeeToken:props.HQ_COMMITTEE_TOKEN}).directives.length,1);
+assert.equal(call({op:"hq.directive.update",id:d.id,expectedUpdatedAt:d.updatedAt,fields:{Status:"Published"},committeeToken:props.HQ_COMMITTEE_TOKEN}).ok,true);
+assert.equal(call({op:"hq.read"}).directives.length,1);
+assert.equal(call({op:"hq.directive.update",id:d.id,expectedUpdatedAt:d.updatedAt,fields:{Body:"Stale overwrite"},committeeToken:props.HQ_COMMITTEE_TOKEN}).ok,false,"stale revision rejected");
+const t=call({op:"hq.timeoff.add",fields:{Person:"Synthetic member",Start:"2026-11-01",End:"2026-11-03",Note:""}});assert.equal(t.ok,true);
+const t2=call({op:"hq.timeoff.update",id:t.id,expectedUpdatedAt:t.updatedAt,fields:{End:"2026-11-04"},by:"Different member"});assert.equal(t2.ok,true,"all members can edit shared time off");
+assert.equal(call({op:"hq.timeoff.update",id:t.id,expectedUpdatedAt:t2.updatedAt,fields:{Start:"2026-11-05"}}).ok,false,"reversed date range rejected");
+assert.equal(call({op:"hq.timeoff.add",fields:{Person:"Synthetic",Start:"2026-02-30",End:"2026-03-02"}}).ok,false);
+assert.equal(call({op:"hq.timeoff.archive",id:t.id,expectedUpdatedAt:t2.updatedAt}).ok,true);
+assert.equal(books.hq.getSheetByName("TimeOff").getLastRow(),2,"cancel retains entry");
+assert.equal(call({op:"hq.read"}).timeOff[0].Status,"Cancelled");
+assert.equal(call({op:"hq.resource.add",fields:{Title:"Bad link",URL:"javascript:alert(1)"}}).ok,false);
+assert.equal(call({op:"hq.resource.add",fields:{Title:"Shared Drive",URL:"https://drive.google.com/drive/folders/example",Category:"Drive",Description:"Folder"}}).ok,true);
+const read=call({op:"hq.read"});assert.equal(read.resources.length,3);assert.equal(read.budget.period,"Q3 2026 (Aug-Oct)");
+assert.equal(read.budget.treasury,"$12,000.00");assert.equal(read.budget.outstandingIncome,"$2,500.00");
+assert.equal("members" in read.budget,false,"budget exports aggregates only");
+books.budget.sheets[0].values[2][0]="Layout changed";
+assert.equal(call({op:"hq.read"}).budget,null,"budget layout changes fail closed");
+assert.equal(call({op:"grants.stage",funder:"Synthetic funder",stage:"Drafting"}).ok,true);
+assert.equal(books.grants.sheets[0].values[1][1],"Drafting");
+assert.equal(call({op:"grants.update",funder:"Synthetic funder",patch:{"Pipeline Stage":"Submitted","Next Action Date":"not a date"}}).ok,false);
+assert.equal(books.grants.sheets[0].values[1][1],"Drafting","invalid grants patch makes no partial change");
+books.grants.sheets[0].values.push(["Synthetic funder","Qualified","","","","",""]);
+assert.equal(call({op:"grants.stage",funder:"Synthetic funder",stage:"Submitted"}).ok,false,"duplicate funder never guesses target");
+books.grants.sheets[0].values.pop();
+books.grants.sheets[0].values[0].push("Website","Notes");books.grants.sheets[0].values[1].push("https://example.invalid/","private application notes");
+books["grants-feed"]=new Book("grants-feed",[new Sheet("Targets",[Array(14).fill("old-private-value"),Array(14).fill("old-private-value"),Array(14).fill("old-private-value")],987),new Sheet("Stats",[["Metric","Value"],["Funds Raised (EUR) — confirmed amounts only",400],["Campaign Goal",100]],654)]);
+props.GRANTS_FEED_ID="grants-feed";
+const grantsProjection=ctx.breadRefreshGrantsFeed();assert.equal(grantsProjection.ok,true);assert.equal(grantsProjection.tabs.Targets.gid,987);
+assert.equal(JSON.stringify(books["grants-feed"].sheets.map(s=>s.values)).includes("private application notes"),false);
+assert.equal(JSON.stringify(books["grants-feed"].sheets.map(s=>s.values)).includes("old-private-value"),false);
+assert.equal(books["grants-feed"].getSheetByName("Stats").values.find(r=>r[0]==="Funds Raised (EUR) — confirmed amounts only")[1],"400","confirmed fundraising metric preserved, never inferred from grant amount");
+const grantWrite=call({op:"grants.stage",funder:"Synthetic funder",stage:"Submitted"});assert.equal(grantWrite.ok,true);assert.equal(grantWrite.feedUpdated,true);
+assert.equal(books["grants-feed"].getSheetByName("Stats").values.find(r=>r[0]==="Submitted")[1],"1");
+assert.equal(call({op:"unknown.operation"}).ok,false);
+assert.equal(env.isLocked(),false,"no leaked/nested locks");
+const none=environment({},{}),empty=vm.createContext(none.sandbox);vm.runInContext(code,empty);
+assert.equal(JSON.parse(empty.doPost({postData:{contents:JSON.stringify({token:"",op:"work.add",fields:{Task:"Should never write"}})}}).text).ok,false);
+assert.equal(empty.Bh.WORK_SS_ID,"","bundle has no implicit production work destination");
+assert.equal(empty.Bh.CRM_FEED_ID,"","bundle has no implicit production CRM feed");
+console.log("Consolidated suite + HQ + budget + grants harness: passed");

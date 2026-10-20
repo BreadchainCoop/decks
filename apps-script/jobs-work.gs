@@ -102,7 +102,9 @@ function breadWorkHygiene() {
       }),
       overWip: overWip
     };
-    var sig = JSON.stringify(payload);
+    var sig = JSON.stringify({ counts: payload.counts, overdue: payload.overdue,
+      blocked: payload.blocked, unowned: payload.unowned, overWip: payload.overWip,
+      stale: stale.map(function (x) { return [x.task.row, x.task.task, x.task.owner]; }) });
 
     var summary = Bh.digestLine([
       overdue.length ? overdue.length + " overdue" : "",

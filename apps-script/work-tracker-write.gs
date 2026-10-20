@@ -68,6 +68,9 @@ function json(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 function fail(msg) { return json({ ok: false, error: String(msg) }); }
+function safeSheetValue_(value) {
+  return typeof value === "string" && value.charAt(0) === "=" ? "'" + value : value;
+}
 
 function sheetByName(ss, name) {
   var sh = ss.getSheetByName(name);
@@ -125,7 +128,7 @@ function logHistory(ss, op, task, detail, by) {
     sh = ss.insertSheet(HIST_SHEET);
     sh.appendRow(["Timestamp", "Op", "Task", "Detail", "By"]);
   }
-  sh.appendRow([new Date(), op, task || "", detail || "", by || "web"]);
+  sh.appendRow([new Date(), op, task || "", detail || "", by || "web"].map(safeSheetValue_));
 }
 
 /* ── contributor dashboard: interest form + outreach task ────────────── */
@@ -201,7 +204,7 @@ function contribWrite_(sh, map, row, patch) {
     }
     var col = map[field];
     if (!col) { changed.push("skipped unknown column: " + k); return; }
-    sh.getRange(row, col).setValue(patch[k]);
+    sh.getRange(row, col).setValue(safeSheetValue_(patch[k]));
     changed.push(field + " → " + patch[k]);
   });
   return changed;
@@ -242,7 +245,7 @@ function handleContributor_(body) {
       }
 
       if (found > 0) {
-        tasks.getRange(found, ownerCol).setValue(owner);
+        tasks.getRange(found, ownerCol).setValue(safeSheetValue_(owner));
         if (!String(tasks.getRange(found, statusCol).getValue() || "").trim()) {
           tasks.getRange(found, statusCol).setValue("Backlog");
         }
@@ -256,7 +259,7 @@ function handleContributor_(body) {
         var header = WRITABLE[String(k).trim().toLowerCase()];
         if (!header) return;
         var col = tmap[header.toLowerCase()];
-        if (col && col <= width) out[col - 1] = task[k];
+        if (col && col <= width) out[col - 1] = safeSheetValue_(task[k]);
       });
       tasks.appendRow(out);
       var newRow = tasks.getLastRow();
@@ -308,7 +311,7 @@ function doPost(e) {
         var header = WRITABLE[String(k).trim().toLowerCase()];
         if (!header) { changed.push("skipped unknown column: " + k); return; }
         var col = map[header.toLowerCase()];
-        sh.getRange(row, col).setValue(patch[k]);
+        sh.getRange(row, col).setValue(safeSheetValue_(patch[k]));
         changed.push(header + " → " + patch[k]);
       });
 
@@ -327,7 +330,7 @@ function doPost(e) {
         var header = WRITABLE[String(k).trim().toLowerCase()];
         if (!header) return;
         var col = map[header.toLowerCase()];
-        if (col <= width) out[col - 1] = fields[k];
+        if (col <= width) out[col - 1] = safeSheetValue_(fields[k]);
       });
       sh.appendRow(out);
       var newRow = sh.getLastRow();

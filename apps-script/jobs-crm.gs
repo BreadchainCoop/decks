@@ -18,21 +18,27 @@ function breadCrmFollowups() {
     if (!sheet) return "no Contacts tab in CRM feed";
 
     var table = Bh.readRows(sheet);
+    var archived = {};
+    var campaignSheet = ss.getSheetByName("Campaigns");
+    if (campaignSheet) Bh.readRows(campaignSheet).rows.forEach(function (o) {
+      if (String(o.status) === "Archived") archived[String(o.campaignid)] = true;
+    });
     var str = function (v) { return String(v === null || v === undefined ? "" : v).trim(); };
     var rows = table.rows.map(function (o) {
       return {
         campaign: str(o.campaign),
+        campaignId: str(o.campaignid), contactId: str(o.contactid),
         contact: str(o.contact),
         priority: str(o.priority),
         goal: str(o.goal),
         owner: str(o.owner),
         status: str(o.status),
         action: str(o.action),
-        last: Bh.parseDate(o.lastconnected),
+        last: o.contactid && !/^\d{4}-\d{2}-\d{2}$/.test(str(o.lastconnected)) ? null : Bh.parseDate(o.lastconnected),
         row: str(o.row),
         gid: str(o.gid)
       };
-    }).filter(function (r) { return r.contact && r.contact.charAt(0) !== "#"; });
+    }).filter(function (r) { return r.contact && !archived[r.campaignId] && (r.contactId || r.contact.charAt(0) !== "#"); });
 
     var closed = function (r) { return /^(completed|declined)$/i.test(r.status); };
     var contacted = function (r) { return /^contacted$/i.test(r.status); };
@@ -62,7 +68,7 @@ function breadCrmFollowups() {
       return {
         campaign: r.campaign, contact: r.contact, owner: r.owner,
         priority: r.priority, status: r.status, action: r.action,
-        row: r.row, gid: r.gid
+        row: r.row, gid: r.gid, contactId: r.contactId
       };
     };
     var payload = {
@@ -91,7 +97,8 @@ function breadCrmFollowups() {
       ref: "contacts",
       summary: summary,
       payload: payload,
-      sig: JSON.stringify(payload)
+      sig: JSON.stringify({ counts: payload.counts, unownedHigh: payload.unownedHigh,
+        blocked: payload.blocked, stale: stale.map(function (x) { return [x.r.contactId || x.r.campaign + "|" + x.r.row, x.r.owner, x.r.action]; }) })
     });
     return wrote ? "notified: " + summary : "unchanged";
   });
