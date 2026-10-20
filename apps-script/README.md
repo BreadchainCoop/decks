@@ -64,6 +64,17 @@ Tab in the Work Tracker sheet, created on first event:
 - A cleared condition resets the signature, so a recurrence notifies again.
 - `Handled` is the agent's flag; the jobs never touch it.
 
+## CRM migration (next)
+
+The ten per-campaign tabs become one `Contacts` table with stable IDs, so a
+campaign can be archived or deleted without touching a contact. The full plan —
+schemas, field mapping, quirks (Artizen's variant, Neo bank's repeated header,
+Devconnect's gid 0), validation counts, cutover and rollback — is in
+[`MIGRATION-CRM.md`](MIGRATION-CRM.md).
+
+Campaign create/archive and the Bread HQ campaign list build on that migration,
+not before it.
+
 ## Deploy
 
 1. Open the Work Tracker sheet → **Extensions → Apps Script**.

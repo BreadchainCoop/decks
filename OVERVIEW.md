@@ -180,10 +180,11 @@ Target: **zero model calls on a quiet day**. The only daily calls should be
    weekly rollup; each starts in **dry-run** (inbox only) before it writes.
 5. **Retire** the node watcher and the separate CRM web app once their
    replacements are live for a week.
-6. **Bread HQ + campaign lifecycle** — the front door (`index.html`), campaign
-   registry, create/archive without touching contacts, directives, resources
-   and time off. Campaign deletion starts as **archive**; consolidating contacts
-   into one table (so deletion is metadata) is the later, bigger migration.
+6. **Bread HQ + campaign lifecycle** — consolidate CRM contacts into one table
+   first (spec: [`apps-script/MIGRATION-CRM.md`](apps-script/MIGRATION-CRM.md)),
+   then the campaign registry, create/archive, directives, resources and time
+   off. With one Contacts table, deleting a campaign is metadata and never
+   touches a contact.
 7. **Consolidate the Apps Scripts — once, last.** After the surfaces stop
    moving:
    - one project, one web app URL, one token, ops namespaced per domain;
