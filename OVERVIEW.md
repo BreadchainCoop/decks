@@ -69,9 +69,9 @@ only the four dashboards share the SSO salt.
 | Grant intake | daily 08:45 | `Start a Grant` | Grants row, Master doc, email | draft (`drafts/grant-tracker.gs`) |
 | Grant hygiene | Mon 08:15 | Grants links/actions | flags only (no moves) | draft |
 | Grant discovery | Wed 08:25 | 8 sources | `Discovery inbox` + email | draft |
-| **Work hygiene** | daily 09:00 | Tasks, History | Agent Inbox digest | to build |
-| **CRM follow-ups** | daily 09:15 | CRM tabs, History | Agent Inbox digest | to build |
-| **Contributor gate** | daily 09:30 | Interest form | Agent Inbox event | node watcher today |
+| **Work hygiene** | daily 09:00 | Tasks, History | Agent Inbox digest | built + harness-tested, not deployed |
+| **CRM follow-ups** | daily 09:15 | CRM tabs, History | Agent Inbox digest | built + harness-tested, not deployed |
+| **Contributor gate** | daily 09:30 | Interest form | Agent Inbox event | built + harness-tested; node watcher still live |
 | **Weekly rollup** | Mon 08:00 | all sheets | Agent Inbox | to build |
 | **Form → inbox** | on submit | Interest form | Agent Inbox | to build |
 

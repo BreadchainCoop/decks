@@ -20,6 +20,50 @@ One deployment, one URL, one `TOKEN`. Both decks run in copy-command mode until
 this endpoint yet. The automation map — jobs, triggers, the Agent Inbox and the
 token budget — is in [`../OVERVIEW.md`](../OVERVIEW.md) §4.
 
+## Automation files
+
+| File | Purpose |
+|---|---|
+| `bh-lib.gs` | namespaced helpers: dates, header maps, row find, locks, Agent Inbox, change detection |
+| `jobs-work.gs` | `breadWorkHygiene` — overdue / blocked / unowned / stale / over-WIP digest |
+| `jobs-crm.gs` | `breadCrmFollowups` — silent 45d+, high-priority unowned, blocked |
+| `jobs-contributors.gs` | `breadContributorGate` — new signups, 7d+ unowned, 30d+ waiting |
+| `install-triggers.gs` | `breadInstallTriggers()` / `breadUninstallTriggers()` / `breadRunJobsNow()` |
+| `tests/automation-harness.cjs` | Node harness: runs the jobs against a fake Sheets API |
+
+The jobs are **read-only over the source sheets**. Their only write is one row
+in the Work Tracker's `Agent Inbox` tab, and only when the digest changed since
+the last time it ran. Quiet day ⇒ no rows ⇒ no model call.
+
+### Deploy
+
+1. Paste `bh-lib.gs`, the three `jobs-*.gs` files and `install-triggers.gs` into
+   the same Apps Script project as `work-tracker-write.gs` (separate files; the
+   globals are namespaced under `Bh`).
+2. Run `breadRunJobsNow()` once to smoke-test; it returns each job's result and
+   fills the inbox.
+3. Run `breadInstallTriggers()` once. That installs:
+   - 09:00 `breadWorkHygiene`
+   - 09:15 `breadCrmFollowups`
+   - 09:30 `breadContributorGate`
+   (script timezone, daily)
+4. Tell Breadrich to poll `Agent Inbox` for rows with `Handled = ""`.
+
+Local check: `node apps-script/tests/automation-harness.cjs` — 38 assertions
+covering date parsing, inbox creation, change detection, recurrence, baseline
+behaviour and the CRM/contributor counts.
+
+### Agent Inbox
+
+Tab in the Work Tracker sheet, created on first event:
+
+`Timestamp · Source · Kind · Severity · Ref · Summary · Payload · Handled`
+
+- `Source` is `work`, `crm` or `contributors`.
+- One live event per source/kind; it updates only when the situation changes.
+- A cleared condition resets the signature, so a recurrence notifies again.
+- `Handled` is the agent's flag; the jobs never touch it.
+
 ## Deploy
 
 1. Open the Work Tracker sheet → **Extensions → Apps Script**.
