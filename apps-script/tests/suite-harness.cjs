@@ -97,6 +97,17 @@ assert.equal(pipelineProjection.tabs.Targets.rows,1);
 assert.equal(books["grants-feed"].getSheetByName("Targets").values[1][0],"Updated funder");
 assert.equal(books["grants-feed"].getSheetByName("Targets").values[1][11],"2026-12-01");
 books.grants.sheets.pop(); // back to Grants so the write-through check below reads it
+const flat=ctx.BreadGrantsPipeline.flatten([
+  ["Organizational Name","Grant Name","Deadline (date)","Days left","Est. max (USD, approx.)","Source"],
+  ["OPEN NOW: deadline on or before 31 Dec 2026 (7)","","","","$1,375,100",""],
+  ["Real Funder","Real Grant","2026-11-01","40","$10,000","Grants tab"],
+  ["","","","","",""]
+]);
+assert.equal(flat.rows.length,1,"section and blank rows never become grants");
+assert.equal(flat.rows[0][0],"Real Funder");
+assert.equal(flat.rows[0][3],"","derived Days left is never frozen into the table");
+assert.equal(flat.headers[4],"Est. max (USD)","view header alias normalised");
+assert.equal(flat.skipped,2);
 assert.equal(JSON.stringify(books["grants-feed"].sheets.map(s=>s.values)).includes("private application notes"),false);
 assert.equal(JSON.stringify(books["grants-feed"].sheets.map(s=>s.values)).includes("old-private-value"),false);
 assert.equal(books["grants-feed"].getSheetByName("Stats").values.find(r=>r[0]==="Funds Raised (EUR) — confirmed amounts only")[1],"400","confirmed fundraising metric preserved, never inferred from grant amount");

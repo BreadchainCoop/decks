@@ -137,6 +137,12 @@ IDs yourself, including any new sheets.
    [CRM-WRITES.md](CRM-WRITES.md), then `breadCrmPrepareWriteSchemaCopy()`.
 3. Run `breadCrmRefreshFeedCopy()` and `breadRefreshGrantsFeed()`. Save the returned
    gids for the staging build. Source and feed IDs must be distinct.
+   If the tracker keeps a curated `Merged Pipeline` view, materialise the table
+   it feeds: `breadGrantsPipelinePreview()` (read-only) then
+   `breadGrantsPipelineBuild()` with `GRANTS_PIPELINE_APPLY=true`. It rewrites
+   **only** the `Pipeline` tab — dropping section/subtotal rows and the stale
+   `Days left` formula — and returns the gid to use as
+   `BREAD_GRANTS_TAB_GID` when building the deck.
    Then make the **feeds** readable by the people testing the decks: a sheet
    copy does *not* inherit "publish to web" or link sharing, and the dashboards
    read feeds through `gviz`, so an unshared feed renders as an empty
