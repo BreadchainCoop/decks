@@ -90,6 +90,13 @@ const tHead=books["grants-feed"].getSheetByName("Targets").values[0];
 const tRow=books["grants-feed"].getSheetByName("Targets").values[1];
 assert.deepEqual(tHead.slice(11),["Deadline","EstMax","Source","Verified"],"pipeline fields appended after Row so existing positions stay stable");
 assert.deepEqual(tRow.slice(11),["2026-11-01","$10,000","Grants tab + Web check","2026-10-20"],"deadline/estimate/source/verification projected");
+books.grants.sheets.push(new Sheet("Pipeline",[["Organizational Name","Pipeline Stage","Team Member","Next Action","Next Action Date","Document Link","Outcome","Website","Deadline (date)"],["Updated funder","Drafting","Sam","Do it","","","","https://example.invalid/","2026-12-01"]],555));
+const pipelineProjection=ctx.breadRefreshGrantsFeed();
+assert.equal(pipelineProjection.sourceTab,"Pipeline","updated Pipeline dataset wins over Grants");
+assert.equal(pipelineProjection.tabs.Targets.rows,1);
+assert.equal(books["grants-feed"].getSheetByName("Targets").values[1][0],"Updated funder");
+assert.equal(books["grants-feed"].getSheetByName("Targets").values[1][11],"2026-12-01");
+books.grants.sheets.pop(); // back to Grants so the write-through check below reads it
 assert.equal(JSON.stringify(books["grants-feed"].sheets.map(s=>s.values)).includes("private application notes"),false);
 assert.equal(JSON.stringify(books["grants-feed"].sheets.map(s=>s.values)).includes("old-private-value"),false);
 assert.equal(books["grants-feed"].getSheetByName("Stats").values.find(r=>r[0]==="Funds Raised (EUR) — confirmed amounts only")[1],"400","confirmed fundraising metric preserved, never inferred from grant amount");

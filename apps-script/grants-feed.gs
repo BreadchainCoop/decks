@@ -8,8 +8,12 @@ var BreadGrantsFeed = (function () {
     if (!sourceId || !feedId || sourceId === feedId) throw new Error("Configure separate grants source/feed sheets");
     Bh.assertWriteDestination(sourceId); Bh.assertWriteDestination(feedId);
     return Bh.withLock(function () {
-      var source = SpreadsheetApp.openById(sourceId), feed = SpreadsheetApp.openById(feedId), sh = source.getSheetByName("Grants");
-      if (!sh) throw new Error("Missing Grants tab");
+      var source = SpreadsheetApp.openById(sourceId), feed = SpreadsheetApp.openById(feedId);
+      // "Pipeline" is the updated dataset when present; "Grants" stays the
+      // fallback so an older tracker keeps projecting unchanged.
+      var sh = source.getSheetByName("Pipeline") || source.getSheetByName("Grants");
+      if (!sh) throw new Error("Missing Pipeline/Grants tab");
+      var sourceTab = sh.getName(), sourceGid = sh.getSheetId();
       var table = Bh.readRows(sh), map = table.map;
       if (!map.funder && !map["organizational name"]) throw new Error("Missing grants identity header");
       ["pipeline stage", "team member", "next action", "next action date", "website", "document link"].forEach(function (h) { if (!map[h]) throw new Error("Missing Grants." + h); });
@@ -26,7 +30,7 @@ var BreadGrantsFeed = (function () {
         var verified = o["last verified"];
         if (verified instanceof Date) verified = Bh.fmtDate(verified);
         return [o.funder || o["organizational name"], o.category || o["type of grantor"] || "", o.grant || o["grant name"] || "", o["pipeline stage"] || "", o.tier || "", o["next action"] || "", due || "", o["team member"] || "", o.website || "", o["document link"] || "", String(o.__row),
-          deadline || "", o["est. max (usd)"] || "", o.source || "", verified || ""];
+          deadline || "", o["est. max (usd)"] || o["est. max (usd, approx.)"] || "", o.source || "", verified || ""];
       });
       var stats = Object.create(null);
       stats["Campaign Goal"] = "100"; stats["Campaign Start"] = ""; stats["Funds Raised (EUR) — confirmed amounts only"] = "0";
@@ -51,7 +55,7 @@ var BreadGrantsFeed = (function () {
         if (nc > plan[1].length) tab.getRange(1, plan[1].length + 1, Math.max(nr, values.length), nc - plan[1].length).clearContent();
         result[plan[0]] = { gid: tab.getSheetId(), rows: plan[2].length };
       });
-      return { ok: true, tabs: result };
+      return { ok: true, tabs: result, sourceTab: sourceTab, sourceGid: sourceGid };
     });
   }
   return { refresh: refresh };

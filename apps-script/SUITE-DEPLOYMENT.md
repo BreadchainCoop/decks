@@ -115,6 +115,12 @@ IDs yourself, including any new sheets.
   `Row`, so earlier column positions stay stable. A tracker without those
   headers projects blanks rather than failing; `Days left` is derived in the
   dashboard from `Deadline` and is never stored.
+- **Updated dataset:** if the tracker has a flat `Pipeline` tab, the feed reads
+  it and ignores `Grants`; otherwise it falls back to `Grants`. `Pipeline` must
+  be tabular — one row per grant. The hand-curated `Merged Pipeline` view has
+  section headings and subtotal rows and is **never** read directly. Because
+  row links point at whichever tab was read, the deck is built with
+  `BREAD_GRANTS_TAB_GID` set to that tab's gid.
 - `Start a Grant` has instructions on rows 1–2 and its actual header on row 3.
   Existing `Status (Breadrich fills this)` entries are treated as handled.
   New fixed marker columns are appended on that header row, never guessed from
