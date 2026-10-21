@@ -111,6 +111,10 @@ IDs yourself, including any new sheets.
   `Next Action Date`, `Submitted On`, `Outcome`) are appended after it. Existing
   rows already carry canonical stages, so the dashboard is not blank — but do
   not confuse the two vocabularies.
+- `Targets` carries `Deadline`, `EstMax`, `Source` and `Verified` **after**
+  `Row`, so earlier column positions stay stable. A tracker without those
+  headers projects blanks rather than failing; `Days left` is derived in the
+  dashboard from `Deadline` and is never stored.
 - `Start a Grant` has instructions on rows 1–2 and its actual header on row 3.
   Existing `Status (Breadrich fills this)` entries are treated as handled.
   New fixed marker columns are appended on that header row, never guessed from

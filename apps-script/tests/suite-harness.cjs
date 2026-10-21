@@ -81,9 +81,15 @@ assert.equal(books.grants.sheets[0].values[2][1],"Submitted","named grant row up
 assert.equal(call({op:"grants.stage",funder:"Synthetic funder",grant:"No Such Grant",stage:"Submitted"}).ok,false,"unknown grant still rejects");
 books.grants.sheets[0].values.pop();
 books.grants.sheets[0].values[0].push("Website","Notes");books.grants.sheets[0].values[1].push("https://example.invalid/","private application notes");
+books.grants.sheets[0].values[0].push("Deadline (date)","Est. max (USD)","Source","Last verified");
+books.grants.sheets[0].values[1].push("2026-11-01","$10,000","Grants tab + Web check","2026-10-20");
 books["grants-feed"]=new Book("grants-feed",[new Sheet("Targets",[Array(14).fill("old-private-value"),Array(14).fill("old-private-value"),Array(14).fill("old-private-value")],987),new Sheet("Stats",[["Metric","Value"],["Funds Raised (EUR) — confirmed amounts only",400],["Campaign Goal",100]],654)]);
 props.GRANTS_FEED_ID="grants-feed";
 const grantsProjection=ctx.breadRefreshGrantsFeed();assert.equal(grantsProjection.ok,true);assert.equal(grantsProjection.tabs.Targets.gid,987);
+const tHead=books["grants-feed"].getSheetByName("Targets").values[0];
+const tRow=books["grants-feed"].getSheetByName("Targets").values[1];
+assert.deepEqual(tHead.slice(11),["Deadline","EstMax","Source","Verified"],"pipeline fields appended after Row so existing positions stay stable");
+assert.deepEqual(tRow.slice(11),["2026-11-01","$10,000","Grants tab + Web check","2026-10-20"],"deadline/estimate/source/verification projected");
 assert.equal(JSON.stringify(books["grants-feed"].sheets.map(s=>s.values)).includes("private application notes"),false);
 assert.equal(JSON.stringify(books["grants-feed"].sheets.map(s=>s.values)).includes("old-private-value"),false);
 assert.equal(books["grants-feed"].getSheetByName("Stats").values.find(r=>r[0]==="Funds Raised (EUR) — confirmed amounts only")[1],"400","confirmed fundraising metric preserved, never inferred from grant amount");

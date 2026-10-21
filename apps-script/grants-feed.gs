@@ -20,7 +20,13 @@ var BreadGrantsFeed = (function () {
         if (/^lost$/i.test(String(o.outcome || ""))) counts.Lost++;
         var due = o["next action date"];
         if (due instanceof Date) due = Bh.fmtDate(due);
-        return [o.funder || o["organizational name"], o.category || o["type of grantor"] || "", o.grant || o["grant name"] || "", o["pipeline stage"] || "", o.tier || "", o["next action"] || "", due || "", o["team member"] || "", o.website || "", o["document link"] || "", String(o.__row)];
+        // Optional pipeline columns: absent on older trackers, blank rather than fatal.
+        var deadline = o["deadline (date)"];
+        if (deadline instanceof Date) deadline = Bh.fmtDate(deadline);
+        var verified = o["last verified"];
+        if (verified instanceof Date) verified = Bh.fmtDate(verified);
+        return [o.funder || o["organizational name"], o.category || o["type of grantor"] || "", o.grant || o["grant name"] || "", o["pipeline stage"] || "", o.tier || "", o["next action"] || "", due || "", o["team member"] || "", o.website || "", o["document link"] || "", String(o.__row),
+          deadline || "", o["est. max (usd)"] || "", o.source || "", verified || ""];
       });
       var stats = Object.create(null);
       stats["Campaign Goal"] = "100"; stats["Campaign Start"] = ""; stats["Funds Raised (EUR) — confirmed amounts only"] = "0";
@@ -32,7 +38,7 @@ var BreadGrantsFeed = (function () {
       }
       Object.keys(counts).forEach(function (k) { stats[k] = String(counts[k]); });
       var plans = [
-        ["Targets", ["Funder", "Category", "Grant", "Stage", "Tier", "NextAction", "Due", "Owner", "Website", "DocLink", "Row"], rows],
+        ["Targets", ["Funder", "Category", "Grant", "Stage", "Tier", "NextAction", "Due", "Owner", "Website", "DocLink", "Row", "Deadline", "EstMax", "Source", "Verified"], rows],
         ["Stats", ["Metric", "Value"], Object.keys(stats).sort().map(function (k) { return [k, stats[k]]; })]
       ], result = {};
       plans.forEach(function (plan) {
