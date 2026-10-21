@@ -13,6 +13,39 @@ contributions via PR.
 | `watch.cjs` | Daily script-gate watcher. Prints `{wakeAgent, data}` — quiet unless a new signup lands. Zero LLM cost when nothing changed. |
 | `fetch-dump.cjs` | One-off helper: dumps both form tabs (legacy + live) to `raw-*.json` for inspection. |
 
+## The dashboard
+
+[`../contributor-dashboard.html`](../contributor-dashboard.html) is the human
+side of this pipeline, on the same shell as the Work / Grants / CRM dashboards.
+It reads the live tab through gviz and has five working views:
+
+| View | What it answers |
+|------|-----------------|
+| **Overview** | how many signups there are, how many are unowned or waiting, monthly trend, governance/software mix, hours on the table |
+| **Signups** | the full table — filter by status, channel, owner, governance, software; search names, handles and skills; `j`/`k` + `↵` |
+| **Outreach** | the waiting queue in age bands (30d+, 8–30d, this week), oldest first, with a draft message and owner assignment per person |
+| **Skills** | people-per-skill bars and a tag cloud; click a term to filter the table |
+| **Triage** | the 1–5 team scores (S–W), sorted, with a copyable shortlist |
+
+### Ownership → Work Tracker
+
+Assigning a **contact person** does two things in one action:
+
+1. writes `D` (contact person in BC core) on the interest sheet;
+2. upserts one task in the Work Tracker Tasks tab — project `Contributors`,
+   owner = that person, due in a week, status `Backlog`, with a
+   `[ctr:<date>:<name-slug>]` marker at the start of its Notes.
+
+Reassigning moves the same task's owner; the marker is what prevents duplicates.
+The result is that outreach shows up in the owner's Work Tracker workload and
+`My desk` without anyone retyping it.
+
+The dashboard does **not** send messages: the intro draft is copied to the
+clipboard, and in copy-command mode owner/status/score edits copy one
+command (or, for ownership, one command covering both the sheet and the task).
+When the Work Tracker write app is deployed, the same actions POST instead —
+see [`apps-script/`](../apps-script/README.md).
+
 ## How the watcher works
 
 - Reads the interest-form Google Sheet through the **public gviz feed** (no auth).
@@ -43,7 +76,7 @@ JSON object:
 `A` timestamp · `B` name · `C` status (`Contacted` workflow) · `D` contact person in BC core ·
 `E` Discord handle · `F` email · `G` preferred contact · `H` weekly hours · `I` governance interest ·
 `J` software skills · `K` non-software skills · `L` dev skills wanted · `M` capacity ·
-`N` experience · `O` programming background · `P` GitHub/portfolio · `S–V` team eval
+`N` experience · `O` programming background · `P` GitHub/portfolio · `S–W` team eval
 (Value aligned / Skills needed / Vibe / Reliability / Others)
 
 ## What deliberately stays OUT of this repo

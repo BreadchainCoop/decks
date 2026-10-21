@@ -1,0 +1,83 @@
+#!/usr/bin/env node
+const vm=require("node:vm"),assert=require("node:assert/strict");
+const {Sheet,Book,environment}=require("./fake-sheets.cjs"),{build}=require("../build-suite.cjs");
+const pad=d=>d.toISOString().slice(0,10),ago=n=>pad(new Date(Date.now()-n*864e5));
+const tasks=new Sheet("Tasks",[["Task","Project","Owner","Status","Priority","Due","Contact / Org","Grant","KB link","Notes"],["Human task","Ops","Josh","Blocked","High",ago(2),"","","https://github.com/BreadchainCoop/demo/pull/1",""]]);
+const form=new Sheet("Start a Grant",[["Start a grant",...Array(25).fill("")],["Instructions"],["Funder","Grant / program (optional)","Your name","Notes (optional)","Status (Breadrich fills this)"],["Already handled","Program","Josh","","Started by Breadrich"],["Synthetic Fund","Program","Unai","",""]]);
+const grants=new Sheet("Grants",[["Organizational Name","Grant Name","Pipeline Stage","Team Member","Next Action","Next Action Date","Document Link","Website"],["Synthetic Fund","Program","Qualified","Josh","Check",ago(4),"","https://fund.invalid/"]]);
+const contributors=new Sheet("New Form Responses Test",[["Timestamp","What is your name?","Status","Contact perons in BC core"],[ago(60),"Old Synthetic","",""]]);
+const hqTime=new Sheet("TimeOff",[["TimeOffID","Person","Start","End","Note","Status","CreatedAt","UpdatedAt"],["t1","Synthetic member",ago(1),ago(-1),"","Active","",""]]);
+const books={work:new Book("work",[tasks,new Sheet("History",[["Timestamp","Op","Task","Detail","By"],[ago(40),"update","Human task","status","member"]])]),grants:new Book("grants",[form,grants]),contributors:new Book("contributors",[contributors]),hq:new Book("hq",[hqTime,new Sheet("Directives",[["DirectiveID","Title","Body","Owner","Status","Start","End","CreatedAt","UpdatedAt"],["d1","Published synthetic","Text","Committee","Published","","","",""]])]),feed:new Book("feed",[new Sheet("Contacts",[["Campaign","Contact","Priority","Goal","Owner","Status","Action","Project","Deliverable","LastConnected","LocationMet","Row","GID","ContactID","CampaignID","Type"],["Stacks","Synthetic contact","High","","Josh","Contacted","Follow up","","",ago(60),"",2,456,"c_job","stacks",""]],1045890393),new Sheet("Campaigns",[["CampaignID","Campaign","Status"],["stacks","Stacks","Active"]])])};
+const props={WORK_SPREADSHEET_ID:"work",CONTRIB_SPREADSHEET_ID:"contributors",CRM_FEED_ID:"feed",HQ_SPREADSHEET_ID:"hq",GRANTS_SPREADSHEET_ID:"grants",BREAD_WRITE_TOKEN:"x".repeat(40)};
+const env=environment(books,props),ctx=vm.createContext(env.sandbox);
+let apiFailure=false,incomplete=false,closePr=false,closeIssue=false,changedDiscovery=false,docCount=0;
+const docs=[];
+function result(value,status=200){return {getResponseCode:()=>status,getContentText:()=>typeof value==="string"?value:JSON.stringify(value)};}
+const pr={html_url:"https://github.com/BreadchainCoop/demo/pull/1",repository_url:"https://api.github.com/repos/BreadchainCoop/demo",number:1,title:"Synthetic PR",user:{login:"tbsoc"},draft:false};
+const issue={html_url:"https://github.com/BreadchainCoop/demo/issues/2",repository_url:"https://api.github.com/repos/BreadchainCoop/demo",number:2,title:"Synthetic issue",assignees:[{login:"Mettodo"}]};
+ctx.UrlFetchApp={fetch(url){
+  if(url.startsWith("https://api.github.com")){
+    if(apiFailure)return result({},500);
+    if(url.includes("requested_reviewers"))return result({users:[{login:"Mettodo"}]});
+    const q=new URL(url).searchParams.get("q");
+    const items=q.includes("is:closed")?([...(closePr?[pr]:[]),...(closeIssue?[issue]:[])]):q.includes("is:pr")?(closePr?[]:[pr]):(closeIssue?[]:[issue]);
+    return result({items,total_count:items.length,incomplete_results:incomplete});
+  }
+  if(url==="https://fund.invalid/")return result("gone",404);
+  return result("<rss><item><title>"+(changedDiscovery&&url.includes("nlnet")?"Changed funding call":"Example funding call")+"</title><link>https://example.invalid/call</link></item></rss>");
+}};
+ctx.DocumentApp={ParagraphHeading:{HEADING2:"h2"},create(title){const id="doc"+(++docCount);docs.push({title,id});return {getId:()=>id,getBody:()=>({appendParagraph:()=>({setHeading(){return this;}})}),saveAndClose(){}};}};
+ctx.DriveApp={getFilesByName:title=>{const found=docs.filter(d=>d.title===title);let index=0;return {hasNext:()=>index<found.length,next:()=>({getId:()=>found[index++].id})};}};
+vm.runInContext(build(),ctx);
+const inbox=()=>books.work.getSheetByName("Agent Inbox")?.values.slice(1)||[];
+assert.match(ctx.breadGrantIntake(),/notified/);assert.equal(docCount,0,"intake defaults to dry run");
+assert.equal(ctx.breadGrantIntake(),"unchanged");assert.equal(grants.values[1][2],"Qualified");
+props.GRANTS_INTAKE_MODE="apply";
+assert.match(ctx.breadGrantIntake(),/applied: 1/);assert.equal(docCount,1);assert.equal(grants.values[1][2],"Drafting");
+assert.equal(form.values[2][26],"Intake ID","metadata headers attach to actual header row and extend grid safely");
+assert.equal(form.values[3][4],"Started by Breadrich","legacy handled intake is preserved, never resubmitted");
+assert.equal(ctx.breadGrantIntake(),"clear");assert.equal(docCount,1,"rerun does not recreate doc");
+assert.match(String(grants.values[1][6]),/^https:\/\/docs.google.com\/document\/d\/doc1/);
+assert.match(ctx.breadGrantHygiene(),/notified/);const originalAction=grants.values[1][4];
+assert.equal(ctx.breadGrantHygiene(),"unchanged");assert.equal(grants.values[1][4],originalAction,"hygiene never rewrites next action");
+assert.equal(ctx.breadGrantDiscovery(),"baseline");let n=inbox().length;
+assert.equal(ctx.breadGrantDiscovery(),"unchanged");assert.equal(inbox().length,n);
+changedDiscovery=true;assert.equal(ctx.breadGrantDiscovery(),"notified");assert.equal(ctx.breadGrantDiscovery(),"unchanged");
+assert.equal(ctx.breadGithubSync(),"notified");n=tasks.getLastRow();assert.equal(ctx.breadGithubSync(),"unchanged");assert.equal(tasks.getLastRow(),n,"GitHub default never changes tasks");
+props.GITHUB_SYNC_MODE="apply";
+assert.equal(ctx.breadGithubSync(),"applied");assert.equal(tasks.getLastRow(),n+2,"human PR URL retained; review and issue get separate keys");
+assert.equal(ctx.breadGithubSync(),"unchanged");
+let review=tasks.values.findIndex(r=>String(r[0]).startsWith("Review PR"));assert.ok(review>0);
+tasks.values.splice(review,1);
+assert.equal(ctx.breadGithubSync(),"unchanged");assert.equal(tasks.values.some(r=>String(r[0]).startsWith("Review PR")),false,"human-deleted managed review tombstoned");
+const ledger=books.work.getSheetByName("GitHub Sync State");assert.ok(ledger.values.some(r=>r[2]==="TRUE"));
+closePr=true;ctx.breadGithubSync();assert.equal(tasks.values[1][3],"Blocked","closed remote never overwrites human task");
+const managedIssue=tasks.values.find(r=>r[0]==="Synthetic issue");managedIssue[3]="Review";closeIssue=true;ctx.breadGithubSync();
+assert.equal(managedIssue[3],"Review","human status change on a managed task is not auto-completed");
+managedIssue[3]="Backlog";assert.equal(ctx.breadGithubSync(),"applied");assert.equal(managedIssue[3],"Done","unchanged automatic status can be completed");
+const before=JSON.stringify(tasks.values);apiFailure=true;assert.throws(()=>ctx.breadGithubSync(),/GitHub unavailable/);assert.equal(JSON.stringify(tasks.values),before);apiFailure=false;
+incomplete=true;assert.throws(()=>ctx.breadGithubSync(),/incomplete/);assert.equal(JSON.stringify(tasks.values),before);incomplete=false;
+assert.equal(ctx.breadWeeklyRollup(),"notified");assert.equal(ctx.breadWeeklyRollup(),"unchanged");
+assert.equal(ctx.breadHqBoundaries(),"baseline");assert.equal(ctx.breadHqBoundaries(),"unchanged");hqTime.values[1][5]="Cancelled";assert.equal(ctx.breadHqBoundaries(),"notified");assert.equal(ctx.breadHqBoundaries(),"unchanged");
+assert.match(ctx.breadContributorGate(),/^baseline/);contributors.values.push([new Date(),"New Synthetic","",""]);
+assert.match(ctx.breadContributorFormSubmit({source:books.contributors,range:contributors.getRange(3,1)}),/^notified/);
+assert.equal(ctx.breadContributorFormSubmit({source:books.contributors,range:contributors.getRange(3,1)}),"unchanged");
+assert.equal(ctx.breadContributorFormSubmit({source:books.work,range:tasks.getRange(2,1)}),"ignored");
+ctx.breadWorkHygiene();ctx.breadCrmFollowups();ctx.breadContributorGate();
+n=inbox().length;
+const NativeDate=Date;
+ctx.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[NativeDate.now()+864e5]));}static now(){return NativeDate.now()+864e5;}static [Symbol.hasInstance](value){return value instanceof NativeDate;}};
+ctx.breadWorkHygiene();ctx.breadCrmFollowups();ctx.breadContributorGate();
+assert.equal(inbox().length,n,"another quiet day does not repeat age-in-days alerts");
+let triggers=[{getHandlerFunction:()=>"unrelatedUserTrigger",getEventType:()=>"CLOCK",getTriggerSource:()=>"CLOCK",getUniqueId:()=>"unrelated"}];
+ctx.ScriptApp={WeekDay:{MONDAY:"MONDAY",WEDNESDAY:"WEDNESDAY"},getProjectTriggers:()=>triggers,
+  deleteTrigger:t=>{triggers=triggers.filter(x=>x!==t);},newTrigger:fn=>{
+    const builder={timeBased(){return this;},atHour(){return this;},nearMinute(){return this;},inTimezone(){return this;},onWeekDay(){return this;},everyWeeks(){return this;},everyDays(){return this;},everyHours(){return this;},forSpreadsheet(id){assert.equal(id,"contributors");return this;},onFormSubmit(){return this;},create(){triggers.push({getHandlerFunction:()=>fn,getEventType:()=>"TEST",getTriggerSource:()=>"TEST",getUniqueId:()=>fn});}};return builder;
+  }};
+props.GITHUB_SYNC_ENABLED="true";
+const installed=ctx.breadInstallSuiteTriggers();assert.equal(installed.installed.length,10);
+assert.equal(triggers.length,11);ctx.breadInstallSuiteTriggers();assert.equal(triggers.length,11,"trigger installer is idempotent");
+assert.equal(ctx.breadSuiteTriggerAudit().length,11);
+assert.equal(ctx.breadUninstallSuiteTriggers().removed,10);assert.equal(triggers.length,1,"unrelated triggers remain intact");
+assert.equal(env.isLocked(),false);
+console.log("Suite GitHub/grants/rollup/form/HQ automation harness: passed");
